@@ -2,70 +2,97 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+# -----------------------------
+# Page Config
+# -----------------------------
 st.set_page_config(page_title="Shipping Route Efficiency Dashboard", layout="wide")
 
 st.title("🚚 Factory-to-Customer Shipping Route Efficiency Dashboard")
 
+st.markdown("""
+This dashboard analyzes logistics performance using the **Nassau Candy Distributor dataset**.
+The goal is to identify delivery bottlenecks, evaluate route efficiency, and improve shipping performance.
+""")
+
 # -----------------------------
 # Load Dataset
 # -----------------------------
-
 df = pd.read_csv("Nassau Candy Distributor.csv")
 
-df['Order Date'] = pd.to_datetime(df['Order Date'], dayfirst=True)
-df['Ship Date'] = pd.to_datetime(df['Ship Date'], dayfirst=True)
+# Convert dates
+df["Order Date"] = pd.to_datetime(df["Order Date"], dayfirst=True)
+df["Ship Date"] = pd.to_datetime(df["Ship Date"], dayfirst=True)
 
 # -----------------------------
 # Feature Engineering
 # -----------------------------
+df["Shipping Days"] = (df["Ship Date"] - df["Order Date"]).dt.days
+df["Shipping Days"] = df["Shipping Days"].abs()
 
-df['Shipping Days'] = (df['Ship Date'] - df['Order Date']).dt.days
-df['Shipping Days'] = df['Shipping Days'].abs()
+# cap unrealistic values
+df.loc[df["Shipping Days"] > 30, "Shipping Days"] = 5
 
-# Remove unrealistic values
-df.loc[df['Shipping Days'] > 30, 'Shipping Days'] = 5
-
-df['Route'] = df['City'] + " → " + df['Region']
+# create route
+df["Route"] = df["City"] + " → " + df["Region"]
 
 # -----------------------------
 # Sidebar Filters
 # -----------------------------
-
 st.sidebar.header("Dashboard Filters")
 
-region = st.sidebar.multiselect(
-    "Select Region",
-    df['Region'].unique(),
-    default=df['Region'].unique()
+date_range = st.sidebar.date_input(
+    "Order Date Range",
+    [df["Order Date"].min(), df["Order Date"].max()]
 )
 
-ship_mode = st.sidebar.multiselect(
-    "Select Ship Mode",
-    df['Ship Mode'].unique(),
-    default=df['Ship Mode'].unique()
+region_filter = st.sidebar.multiselect(
+    "Region",
+    df["Region"].unique(),
+    default=df["Region"].unique()
 )
 
-df = df[(df['Region'].isin(region)) & (df['Ship Mode'].isin(ship_mode))]
+state_filter = st.sidebar.multiselect(
+    "State",
+    df["State/Province"].unique(),
+    default=df["State/Province"].unique()
+)
+
+shipmode_filter = st.sidebar.multiselect(
+    "Shipping Mode",
+    df["Ship Mode"].unique(),
+    default=df["Ship Mode"].unique()
+)
+
+delay_threshold = st.sidebar.slider(
+    "Delay Threshold (Days)",
+    min_value=1,
+    max_value=15,
+    value=5
+)
+
+# Apply filters
+df = df[
+    (df["Order Date"] >= pd.to_datetime(date_range[0])) &
+    (df["Order Date"] <= pd.to_datetime(date_range[1])) &
+    (df["Region"].isin(region_filter)) &
+    (df["State/Province"].isin(state_filter)) &
+    (df["Ship Mode"].isin(shipmode_filter))
+]
 
 # -----------------------------
 # KPI Calculations
 # -----------------------------
-
-shipping_lead_time = df['Shipping Days'].mean()
-
-avg_lead_time = df.groupby('Route')['Shipping Days'].mean().mean()
-
-route_volume = df.groupby('Route')['Order ID'].count().mean()
-
-delay_frequency = (df['Shipping Days'] > 5).mean() * 100
-
-route_efficiency = (df['Shipping Days'].mean() / df['Shipping Days'].max()) * 100
+shipping_lead_time = df["Shipping Days"].mean()
+avg_lead_time = df.groupby("Route")["Shipping Days"].mean().mean()
+route_volume = df.groupby("Route")["Order ID"].count().mean()
+delay_frequency = (df["Shipping Days"] > delay_threshold).mean() * 100
+route_efficiency = (df["Shipping Days"].mean() / df["Shipping Days"].max()) * 100
 
 # -----------------------------
 # KPI Section
 # -----------------------------
-
-st.subheader("Key Logistics KPIs")
+st.markdown("---")
+st.header("📊 KPI Overview")
 
 col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -76,196 +103,119 @@ col4.metric("Delay Frequency", f"{delay_frequency:.2f}%")
 col5.metric("Route Efficiency Score", f"{route_efficiency:.2f}")
 
 # -----------------------------
-# Sales by Region
+# Route Efficiency Overview
 # -----------------------------
+st.markdown("---")
+st.header("🚦 Route Efficiency Overview")
 
-st.subheader("Sales by Region")
+col1, col2 = st.columns(2)
 
-region_sales = df.groupby('Region')['Sales'].sum().reset_index()
+route_avg = df.groupby("Route")["Shipping Days"].mean().reset_index()
 
-fig = px.bar(
-    region_sales,
-    x='Region',
-    y='Sales',
-    color='Region',
-    title="Sales Distribution by Region"
-)
+with col1:
+    st.subheader("Average Lead Time by Route")
+    fig = px.bar(route_avg, x="Route", y="Shipping Days")
+    st.plotly_chart(fig, use_container_width=True)
 
+with col2:
+    st.subheader("Route Performance Leaderboard")
+    route_rank = df.groupby("Route")["Shipping Days"].mean().sort_values().reset_index()
+    st.dataframe(route_rank)
+
+# -----------------------------
+# Geographic Analysis
+# -----------------------------
+st.markdown("---")
+st.header("🗺 Geographic Shipping Analysis")
+
+col1, col2 = st.columns(2)
+
+state_ship = df.groupby("State/Province")["Shipping Days"].mean().reset_index()
+
+with col1:
+    st.subheader("US Shipping Efficiency Heatmap")
+    fig = px.choropleth(
+        state_ship,
+        locations="State/Province",
+        locationmode="USA-states",
+        color="Shipping Days",
+        scope="usa"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    st.subheader("Regional Bottleneck Analysis")
+    city_delay = df.groupby("City")["Shipping Days"].mean().sort_values(ascending=False).head(10).reset_index()
+    fig = px.bar(city_delay, x="City", y="Shipping Days")
+    st.plotly_chart(fig, use_container_width=True)
+
+# -----------------------------
+# Shipping Mode Comparison
+# -----------------------------
+st.markdown("---")
+st.header("🚚 Shipping Mode Comparison")
+
+ship_mode_perf = df.groupby("Ship Mode")["Shipping Days"].mean().reset_index()
+
+fig = px.bar(ship_mode_perf, x="Ship Mode", y="Shipping Days")
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Shipping Time by Region
+# Route Drill Down
 # -----------------------------
+st.markdown("---")
+st.header("🔎 Route Drill-Down Analysis")
 
-st.subheader("Shipping Time by Region")
+col1, col2 = st.columns(2)
 
-region_ship = df.groupby('Region')['Shipping Days'].mean().reset_index()
+state_perf = df.groupby("State/Province")["Shipping Days"].mean().reset_index()
 
-fig = px.bar(
-    region_ship,
-    x='Region',
-    y='Shipping Days',
-    color='Region',
-    title="Average Shipping Days by Region"
-)
+with col1:
+    st.subheader("State Level Performance")
+    fig = px.bar(state_perf, x="State/Province", y="Shipping Days")
+    st.plotly_chart(fig, use_container_width=True)
 
+with col2:
+    st.subheader("Order Shipment Timeline")
+    timeline = df[["Order ID","Order Date","Ship Date","Shipping Days"]].sort_values("Order Date")
+    st.dataframe(timeline.head(30))
+
+# -----------------------------
+# Sales Analysis
+# -----------------------------
+st.markdown("---")
+st.header("💰 Sales Analysis")
+
+region_sales = df.groupby("Region")["Sales"].sum().reset_index()
+
+fig = px.bar(region_sales, x="Region", y="Sales", color="Region")
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Shipping Mode Efficiency
+# Correlation Analysis
 # -----------------------------
+st.markdown("---")
+st.header("📈 Correlation Analysis")
 
-st.subheader("Shipping Mode Performance")
+corr = df[["Sales","Gross Profit","Units","Shipping Days"]].corr()
 
-ship_mode_perf = df.groupby('Ship Mode')['Shipping Days'].mean().reset_index()
-
-fig = px.bar(
-    ship_mode_perf,
-    x='Ship Mode',
-    y='Shipping Days',
-    color='Ship Mode',
-    title="Shipping Mode Efficiency"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Top Products
-# -----------------------------
-
-st.subheader("Top Products by Sales")
-
-top_products = df.groupby('Product Name')['Sales'].sum().sort_values(ascending=False).head(10).reset_index()
-
-fig = px.bar(
-    top_products,
-    x='Product Name',
-    y='Sales',
-    color='Product Name',
-    title="Top 10 Products by Sales"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# City Delay Analysis
-# -----------------------------
-
-st.subheader("Cities with Highest Shipping Delay")
-
-city_delay = df.groupby('City')['Shipping Days'].mean().sort_values(ascending=False).head(10).reset_index()
-
-fig = px.bar(
-    city_delay,
-    x='City',
-    y='Shipping Days',
-    color='City',
-    title="Cities with Highest Delivery Delays"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Route Efficiency
-# -----------------------------
-
-st.subheader("Shipping Route Efficiency")
-
-route_analysis = df.groupby('Route')['Shipping Days'].mean().sort_values(ascending=False).head(10).reset_index()
-
-fig = px.bar(
-    route_analysis,
-    x='Route',
-    y='Shipping Days',
-    color='Route',
-    title="Top Routes with Highest Shipping Time"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Shipping Distribution
-# -----------------------------
-
-st.subheader("Shipping Days Distribution")
-
-fig = px.histogram(
-    df,
-    x='Shipping Days',
-    color='Region',
-    nbins=10,
-    title="Distribution of Shipping Days"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Geographic Distribution
-# -----------------------------
-
-st.subheader("Geographic Sales Distribution")
-
-city_sales = df.groupby('City')['Sales'].sum().sort_values(ascending=False).head(15).reset_index()
-
-fig = px.scatter(
-    city_sales,
-    x='City',
-    y='Sales',
-    size='Sales',
-    color='Sales',
-    title="Top Cities by Sales"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Profit vs Sales Analysis
-# -----------------------------
-
-st.subheader("Profit vs Sales Analysis")
-
-fig = px.scatter(
-    df,
-    x='Sales',
-    y='Gross Profit',
-    color='Region',
-    title="Sales vs Profit Relationship"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Correlation Matrix
-# -----------------------------
-
-st.subheader("Correlation Analysis")
-
-corr = df[['Sales','Gross Profit','Units','Shipping Days']].corr()
-
-fig = px.imshow(
-    corr,
-    text_auto=True,
-    title="Feature Correlation Matrix"
-)
-
+fig = px.imshow(corr, text_auto=True)
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
 # Insights
 # -----------------------------
+st.markdown("---")
+st.header("💡 Key Insights")
 
-st.subheader("Key Insights")
+st.info("""
+• Some regions show longer shipping times indicating logistics inefficiencies.
 
-st.write("""
-• Some regions experience longer shipping times compared to others.
+• First Class shipping generally delivers faster than Standard Class.
 
-• First Class shipping provides faster delivery compared to Standard Class.
+• Certain cities consistently experience higher delivery delays.
 
-• Certain cities show higher delivery delays indicating logistics bottlenecks.
-
-• A small number of products contribute most of the revenue.
-
-• Route analysis helps identify inefficient shipping routes.
+• Route analysis highlights inefficient delivery routes.
 
 • Sales and profit show strong correlation indicating profitable product segments.
 """)
