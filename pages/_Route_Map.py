@@ -29,10 +29,34 @@ df = load_data()
 df = apply_filters(df)
 
 # ---------------------------------------------------
+# State Mapping (Required for Plotly Map)
+# ---------------------------------------------------
+
+state_map = {
+"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR",
+"California":"CA","Colorado":"CO","Connecticut":"CT",
+"Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI",
+"Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA",
+"Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME",
+"Maryland":"MD","Massachusetts":"MA","Michigan":"MI",
+"Minnesota":"MN","Mississippi":"MS","Missouri":"MO",
+"Montana":"MT","Nebraska":"NE","Nevada":"NV",
+"New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM",
+"New York":"NY","North Carolina":"NC","North Dakota":"ND",
+"Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA",
+"Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD",
+"Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT",
+"Virginia":"VA","Washington":"WA","West Virginia":"WV",
+"Wisconsin":"WI","Wyoming":"WY"
+}
+
+df["state_code"] = df["State/Province"].map(state_map)
+
+# ---------------------------------------------------
 # Route Performance Metrics
 # ---------------------------------------------------
 
-route_stats = df.groupby("State/Province").agg(
+route_stats = df.groupby(["State/Province","state_code"]).agg(
     avg_shipping_days=("Shipping Days","mean"),
     shipments=("Shipping Days","count")
 ).reset_index()
@@ -45,44 +69,55 @@ st.subheader("Route Network Overview")
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric(
-    "Total Shipments",
-    len(df)
-)
-
-col2.metric(
-    "States Served",
-    route_stats["State/Province"].nunique()
-)
-
+col1.metric("Total Shipments", len(df))
+col2.metric("States Served", route_stats["State/Province"].nunique())
 col3.metric(
     "Average Shipping Time",
     f"{route_stats['avg_shipping_days'].mean():.2f} days"
 )
 
 # ---------------------------------------------------
-# US Route Map
+# US Choropleth Map (Correct Map)
 # ---------------------------------------------------
 
 st.markdown("---")
 st.subheader("Shipping Performance Across the United States")
 
-fig = px.scatter_geo(
+fig = px.choropleth(
     route_stats,
+    locations="state_code",
     locationmode="USA-states",
-    locations="State/Province",
-    size="shipments",
     color="avg_shipping_days",
     hover_name="State/Province",
     scope="usa",
-    title="Shipping Efficiency by State",
-    color_continuous_scale="Reds"
+    color_continuous_scale="Reds",
+    title="Average Shipping Time by State"
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------------------------------------
-# Top Routes by Shipment Volume
+# Shipment Volume Bubble Map
+# ---------------------------------------------------
+
+st.markdown("---")
+st.subheader("Shipment Volume by State")
+
+fig2 = px.scatter_geo(
+    route_stats,
+    locationmode="USA-states",
+    locations="state_code",
+    size="shipments",
+    color="avg_shipping_days",
+    hover_name="State/Province",
+    scope="usa",
+    color_continuous_scale="Blues"
+)
+
+st.plotly_chart(fig2, use_container_width=True)
+
+# ---------------------------------------------------
+# Top Shipment States
 # ---------------------------------------------------
 
 st.markdown("---")
@@ -93,7 +128,7 @@ top_states = route_stats.sort_values(
     ascending=False
 ).head(10)
 
-fig2 = px.bar(
+fig3 = px.bar(
     top_states,
     x="State/Province",
     y="shipments",
@@ -101,7 +136,7 @@ fig2 = px.bar(
     title="Shipment Volume by State"
 )
 
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig3, use_container_width=True)
 
 # ---------------------------------------------------
 # Slowest Delivery States
@@ -115,7 +150,7 @@ slow_states = route_stats.sort_values(
     ascending=False
 ).head(10)
 
-fig3 = px.bar(
+fig4 = px.bar(
     slow_states,
     x="State/Province",
     y="avg_shipping_days",
@@ -123,7 +158,7 @@ fig3 = px.bar(
     title="States with Highest Delivery Time"
 )
 
-st.plotly_chart(fig3, use_container_width=True)
+st.plotly_chart(fig4, use_container_width=True)
 
 # ---------------------------------------------------
 # Logistics Insight
