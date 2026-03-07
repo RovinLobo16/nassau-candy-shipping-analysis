@@ -4,11 +4,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score
 
+
 def train_delay_model(df):
 
-    df = df.copy()
-
-    # Define delay
     df["Delayed"] = (df["Shipping Days"] > df["Shipping Days"].median()).astype(int)
 
     features = [
@@ -31,28 +29,16 @@ def train_delay_model(df):
             X[col] = le.fit_transform(X[col])
             encoders[col] = le
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=42
+    X_train,X_test,y_train,y_test = train_test_split(
+        X,y,test_size=0.2,random_state=42
     )
 
-    model = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=10,
-        random_state=42
-    )
+    model = RandomForestClassifier(n_estimators=200)
 
-    model.fit(X_train, y_train)
+    model.fit(X_train,y_train)
 
     preds = model.predict(X_test)
 
-    accuracy = accuracy_score(y_test, preds)
+    acc = accuracy_score(y_test,preds)
 
-    feature_importance = pd.DataFrame({
-        "Feature": X.columns,
-        "Importance": model.feature_importances_
-    }).sort_values("Importance", ascending=False)
-
-    return model, encoders, accuracy, feature_importance
+    return model,encoders,acc
