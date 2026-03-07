@@ -15,13 +15,17 @@ df = pd.read_csv("Nassau Candy Distributor.csv")
 df['Order Date'] = pd.to_datetime(df['Order Date'], dayfirst=True)
 df['Ship Date'] = pd.to_datetime(df['Ship Date'], dayfirst=True)
 
+# -----------------------------
+# Feature Engineering
+# -----------------------------
+
 df['Shipping Days'] = (df['Ship Date'] - df['Order Date']).dt.days
 df['Shipping Days'] = df['Shipping Days'].abs()
 
-# Limit unrealistic values
+# Remove unrealistic values
 df.loc[df['Shipping Days'] > 30, 'Shipping Days'] = 5
 
-df['Profit Margin'] = df['Gross Profit'] / df['Sales']
+df['Route'] = df['City'] + " → " + df['Region']
 
 # -----------------------------
 # Sidebar Filters
@@ -44,17 +48,32 @@ ship_mode = st.sidebar.multiselect(
 df = df[(df['Region'].isin(region)) & (df['Ship Mode'].isin(ship_mode))]
 
 # -----------------------------
+# KPI Calculations
+# -----------------------------
+
+shipping_lead_time = df['Shipping Days'].mean()
+
+avg_lead_time = df.groupby('Route')['Shipping Days'].mean().mean()
+
+route_volume = df.groupby('Route')['Order ID'].count().mean()
+
+delay_frequency = (df['Shipping Days'] > 5).mean() * 100
+
+route_efficiency = (df['Shipping Days'].mean() / df['Shipping Days'].max()) * 100
+
+# -----------------------------
 # KPI Section
 # -----------------------------
 
-st.subheader("Key Performance Indicators")
+st.subheader("Key Logistics KPIs")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
-col1.metric("💰 Total Sales", f"${df['Sales'].sum():,.2f}")
-col2.metric("📈 Total Profit", f"${df['Gross Profit'].sum():,.2f}")
-col3.metric("📦 Units Sold", int(df['Units'].sum()))
-col4.metric("🚚 Avg Shipping Days", round(df['Shipping Days'].mean(),2))
+col1.metric("Shipping Lead Time", round(shipping_lead_time,2))
+col2.metric("Average Lead Time", round(avg_lead_time,2))
+col3.metric("Route Volume", round(route_volume,2))
+col4.metric("Delay Frequency", f"{delay_frequency:.2f}%")
+col5.metric("Route Efficiency Score", f"{route_efficiency:.2f}")
 
 # -----------------------------
 # Sales by Region
@@ -152,12 +171,10 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.subheader("Shipping Route Efficiency")
 
-df['Route'] = df['City'] + " → " + df['Region']
-
-route = df.groupby('Route')['Shipping Days'].mean().sort_values(ascending=False).head(10).reset_index()
+route_analysis = df.groupby('Route')['Shipping Days'].mean().sort_values(ascending=False).head(10).reset_index()
 
 fig = px.bar(
-    route,
+    route_analysis,
     x='Route',
     y='Shipping Days',
     color='Route',
@@ -167,7 +184,7 @@ fig = px.bar(
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Shipping Days Distribution
+# Shipping Distribution
 # -----------------------------
 
 st.subheader("Shipping Days Distribution")
@@ -183,10 +200,10 @@ fig = px.histogram(
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Geographic Shipping Distribution
+# Geographic Distribution
 # -----------------------------
 
-st.subheader("Geographic Shipping Distribution")
+st.subheader("Geographic Sales Distribution")
 
 city_sales = df.groupby('City')['Sales'].sum().sort_values(ascending=False).head(15).reset_index()
 
@@ -218,7 +235,7 @@ fig = px.scatter(
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Correlation Analysis
+# Correlation Matrix
 # -----------------------------
 
 st.subheader("Correlation Analysis")
@@ -234,21 +251,21 @@ fig = px.imshow(
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Insights Section
+# Insights
 # -----------------------------
 
 st.subheader("Key Insights")
 
 st.write("""
-• Certain regions experience longer delivery times compared to others.
+• Some regions experience longer shipping times compared to others.
 
 • First Class shipping provides faster delivery compared to Standard Class.
 
-• Some cities show higher shipping delays indicating logistical bottlenecks.
+• Certain cities show higher delivery delays indicating logistics bottlenecks.
 
-• A small number of products generate most of the revenue.
+• A small number of products contribute most of the revenue.
 
 • Route analysis helps identify inefficient shipping routes.
 
-• Sales and profit show strong correlation, indicating profitable product segments.
+• Sales and profit show strong correlation indicating profitable product segments.
 """)
