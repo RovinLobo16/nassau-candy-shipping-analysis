@@ -16,18 +16,7 @@ st.set_page_config(
 st.title("🤖 AI Shipping Delay Prediction")
 
 st.markdown("""
-This module uses **Machine Learning (Random Forest)** to predict the risk of shipment delays.
-
-The model learns from historical logistics data and evaluates how factors like:
-
-• Shipping Mode  
-• Region  
-• Destination State  
-• Factory Source  
-• Order Size  
-• Sales Value  
-
-influence delivery performance.
+This module uses **Machine Learning (Random Forest)** to predict shipment delays.
 """)
 
 # ----------------------------------------------------
@@ -35,19 +24,17 @@ influence delivery performance.
 # ----------------------------------------------------
 
 df = load_data()
-
-# Apply global dashboard filters
 df = apply_filters(df)
 
 # ----------------------------------------------------
-# Train Model (cached)
+# Train Model
 # ----------------------------------------------------
 
 @st.cache_resource
 def get_model(data):
     return train_delay_model(data)
 
-model, encoders, accuracy = get_model(df)
+model, encoders, metrics, feature_importance = get_model(df)
 
 # ----------------------------------------------------
 # Model Performance
@@ -55,31 +42,25 @@ model, encoders, accuracy = get_model(df)
 
 st.subheader("Model Performance")
 
-col1, col2 = st.columns(2)
+col1, col2, col3, col4 = st.columns(4)
 
-with col1:
-    st.metric("Model Accuracy", f"{accuracy:.2%}")
-
-with col2:
-    st.metric("Training Records", len(df))
+col1.metric("Accuracy", f"{metrics['accuracy']:.2%}")
+col2.metric("Precision", f"{metrics['precision']:.2%}")
+col3.metric("Recall", f"{metrics['recall']:.2%}")
+col4.metric("F1 Score", f"{metrics['f1_score']:.2%}")
 
 # ----------------------------------------------------
 # Feature Importance
 # ----------------------------------------------------
 
-st.subheader("Model Feature Importance")
-
-importance = pd.DataFrame({
-    "Feature": model.feature_names_in_,
-    "Importance": model.feature_importances_
-}).sort_values("Importance", ascending=False)
+st.subheader("Feature Importance")
 
 fig = px.bar(
-    importance,
+    feature_importance,
     x="Feature",
     y="Importance",
     color="Importance",
-    title="Features Driving Shipping Delays"
+    title="Factors Influencing Shipping Delays"
 )
 
 st.plotly_chart(fig, use_container_width=True)
@@ -113,22 +94,18 @@ with col1:
 with col2:
 
     factory = st.selectbox(
-        "Factory Source",
+        "Factory",
         sorted(df["Factory"].dropna().unique())
     )
 
     units = st.slider(
         "Units Ordered",
-        min_value=1,
-        max_value=500,
-        value=50
+        1, 500, 50
     )
 
     sales = st.slider(
         "Sales Value ($)",
-        min_value=10,
-        max_value=10000,
-        value=500
+        10, 10000, 500
     )
 
 # ----------------------------------------------------
@@ -144,67 +121,24 @@ input_data = pd.DataFrame({
     "Sales":[sales]
 })
 
-for col, encoder in encoders.items():
-    input_data[col] = encoder.transform(input_data[col])
+for col, enc in encoders.items():
+    input_data[col] = enc.transform(input_data[col])
 
 # ----------------------------------------------------
-# Predict Delay
+# Prediction
 # ----------------------------------------------------
-
-st.markdown("")
 
 if st.button("Predict Shipment Delay"):
 
-    prediction = model.predict(input_data)[0]
-    probability = model.predict_proba(input_data)[0][1]
+    pred = model.predict(input_data)[0]
+    prob = model.predict_proba(input_data)[0][1]
 
     st.subheader("Prediction Result")
 
-    if prediction == 1:
+    if pred == 1:
 
-        st.error(f"""
-⚠ **High Delay Risk**
-
-Predicted delay probability: **{probability:.2%}**
-""")
-
-        st.warning("""
-Recommended actions:
-
-• Consider faster shipping mode  
-• Route from closer factory  
-• Reduce shipment size
-""")
+        st.error(f"⚠ Shipment likely delayed\n\nProbability: {prob:.2%}")
 
     else:
 
-        st.success(f"""
-✅ **Low Delay Risk**
-
-Predicted delay probability: **{probability:.2%}**
-""")
-
-        st.info("""
-Shipment is likely to arrive **on time** based on historical patterns.
-""")
-
-# ----------------------------------------------------
-# Prediction Explanation
-# ----------------------------------------------------
-
-st.markdown("---")
-st.subheader("How the Model Works")
-
-st.markdown("""
-The prediction model uses a **Random Forest classifier** trained on historical shipments.
-
-Key signals used by the model include:
-
-• Shipping mode efficiency  
-• Geographic distance patterns  
-• Factory distribution network  
-• Order size and sales value  
-• Regional logistics performance  
-
-The algorithm evaluates these factors to estimate the **probability of delivery delay**.
-""")
+        st.success(f"✅ Shipment likely on time\n\nProbability: {prob:.2%}")
