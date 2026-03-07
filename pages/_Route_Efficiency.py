@@ -32,13 +32,33 @@ df = load_data()
 df = apply_filters(df)
 
 # ---------------------------------------------------
-# Route Performance Calculation
+# Route Aggregation (Requirement)
 # ---------------------------------------------------
 
 route_stats = df.groupby("Route").agg(
+
+    shipments=("Shipping Days","count"),
+
     avg_shipping_days=("Shipping Days","mean"),
-    shipments=("Shipping Days","count")
+
+    lead_time_variability=("Shipping Days","std"),
+
+    min_delivery=("Shipping Days","min"),
+
+    max_delivery=("Shipping Days","max")
+
 ).reset_index()
+
+# Replace NaN variability (routes with 1 shipment)
+route_stats["lead_time_variability"] = route_stats[
+    "lead_time_variability"
+].fillna(0)
+
+# Route Efficiency Score
+route_stats["Efficiency Score"] = (
+    route_stats["avg_shipping_days"].max()
+    - route_stats["avg_shipping_days"]
+)
 
 route_stats = route_stats.sort_values("avg_shipping_days")
 
@@ -48,7 +68,7 @@ route_stats = route_stats.sort_values("avg_shipping_days")
 
 st.subheader("Route Performance Overview")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
     "Total Routes",
@@ -63,6 +83,11 @@ col2.metric(
 col3.metric(
     "Total Shipments",
     route_stats["shipments"].sum()
+)
+
+col4.metric(
+    "Avg Route Variability",
+    f"{route_stats['lead_time_variability'].mean():.2f} days"
 )
 
 # ---------------------------------------------------
@@ -94,10 +119,31 @@ fig2 = px.bar(
     route_stats.sort_values("shipments",ascending=False).head(10),
     x="Route",
     y="shipments",
-    color="shipments"
+    color="shipments",
+    title="Top Shipment Routes"
 )
 
 st.plotly_chart(fig2, use_container_width=True)
+
+# ---------------------------------------------------
+# Route Variability Chart (NEW)
+# ---------------------------------------------------
+
+st.markdown("---")
+st.subheader("Route Lead Time Variability")
+
+fig_var = px.bar(
+    route_stats.sort_values(
+        "lead_time_variability",
+        ascending=False
+    ).head(15),
+    x="Route",
+    y="lead_time_variability",
+    color="lead_time_variability",
+    title="Routes with Highest Delivery Variability"
+)
+
+st.plotly_chart(fig_var, use_container_width=True)
 
 # ---------------------------------------------------
 # Fastest & Slowest Routes
@@ -109,6 +155,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🏆 Fastest Routes")
+
     st.dataframe(
         route_stats.head(10),
         use_container_width=True
@@ -116,6 +163,7 @@ with col1:
 
 with col2:
     st.subheader("⚠ Slowest Routes")
+
     st.dataframe(
         route_stats.sort_values(
             "avg_shipping_days",
@@ -123,6 +171,20 @@ with col2:
         ).head(10),
         use_container_width=True
     )
+
+# ---------------------------------------------------
+# Efficiency Leaderboard (NEW)
+# ---------------------------------------------------
+
+st.markdown("---")
+st.subheader("Route Efficiency Leaderboard")
+
+leaderboard = route_stats.sort_values(
+    "Efficiency Score",
+    ascending=False
+).head(10)
+
+st.dataframe(leaderboard, use_container_width=True)
 
 # ---------------------------------------------------
 # Route Performance Explorer
@@ -138,7 +200,9 @@ selected_route = st.selectbox(
 
 route_detail = df[df["Route"] == selected_route]
 
+# ---------------------------------------------------
 # Route KPIs
+# ---------------------------------------------------
 
 col1, col2, col3 = st.columns(3)
 
@@ -173,7 +237,7 @@ fig3 = px.histogram(
 st.plotly_chart(fig3, use_container_width=True)
 
 # ---------------------------------------------------
-# Box Plot (Better for performance analysis)
+# Box Plot
 # ---------------------------------------------------
 
 st.markdown("### Route Delivery Spread")
@@ -193,7 +257,9 @@ st.plotly_chart(fig4, use_container_width=True)
 
 st.markdown("### Shipment Timeline")
 
-trend = route_detail.groupby("Order Date")["Shipping Days"].mean().reset_index()
+trend = route_detail.groupby("Order Date")[
+    "Shipping Days"
+].mean().reset_index()
 
 fig5 = px.line(
     trend,
