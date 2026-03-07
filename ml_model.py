@@ -7,23 +7,11 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def train_delay_model(df):
 
-    # --------------------------------------------------
-    # Copy data to avoid modifying original dataframe
-    # --------------------------------------------------
-
     data = df.copy()
 
-    # --------------------------------------------------
-    # Create Delay Target Variable
-    # --------------------------------------------------
-
+    # Create target variable
     threshold = data["Shipping Days"].median()
-
     data["Delayed"] = (data["Shipping Days"] > threshold).astype(int)
-
-    # --------------------------------------------------
-    # Select Features
-    # --------------------------------------------------
 
     features = [
         "Region",
@@ -37,26 +25,18 @@ def train_delay_model(df):
     X = data[features].copy()
     y = data["Delayed"]
 
-    # --------------------------------------------------
-    # Encode Categorical Variables
-    # --------------------------------------------------
-
     encoders = {}
 
+    # Encode categorical variables
     for col in X.columns:
 
         if X[col].dtype == "object":
 
             le = LabelEncoder()
-
             X[col] = le.fit_transform(X[col].astype(str))
-
             encoders[col] = le
 
-    # --------------------------------------------------
-    # Train Test Split (Stratified)
-    # --------------------------------------------------
-
+    # Train Test Split
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -65,10 +45,7 @@ def train_delay_model(df):
         random_state=42
     )
 
-    # --------------------------------------------------
-    # Train Random Forest Model
-    # --------------------------------------------------
-
+    # Random Forest Model
     model = RandomForestClassifier(
         n_estimators=300,
         max_depth=12,
@@ -79,32 +56,13 @@ def train_delay_model(df):
 
     model.fit(X_train, y_train)
 
-    # --------------------------------------------------
-    # Model Evaluation
-    # --------------------------------------------------
+    # Predictions
+    preds = model.predict(X_test)
 
-    predictions = model.predict(X_test)
-
-    accuracy = accuracy_score(y_test, predictions)
-
-    precision = precision_score(y_test, predictions)
-
-    recall = recall_score(y_test, predictions)
-
-    f1 = f1_score(y_test, predictions)
-
-    # --------------------------------------------------
-    # Feature Importance
-    # --------------------------------------------------
-
-    feature_importance = pd.DataFrame({
-        "Feature": X.columns,
-        "Importance": model.feature_importances_
-    }).sort_values("Importance", ascending=False)
-
-    # --------------------------------------------------
-    # Return Everything Needed for Dashboard
-    # --------------------------------------------------
+    accuracy = accuracy_score(y_test, preds)
+    precision = precision_score(y_test, preds)
+    recall = recall_score(y_test, preds)
+    f1 = f1_score(y_test, preds)
 
     metrics = {
         "accuracy": accuracy,
@@ -112,5 +70,11 @@ def train_delay_model(df):
         "recall": recall,
         "f1_score": f1
     }
+
+    # Feature Importance
+    feature_importance = pd.DataFrame({
+        "Feature": X.columns,
+        "Importance": model.feature_importances_
+    }).sort_values("Importance", ascending=False)
 
     return model, encoders, metrics, feature_importance
