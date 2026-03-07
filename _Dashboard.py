@@ -212,7 +212,7 @@ st.markdown(
 """
 <center>
 
-### Unified Mentor Data Analytics Project
+### Unified Mentor Data Science Project
 
 **Factory-to-Customer Logistics Intelligence Platform**
 
