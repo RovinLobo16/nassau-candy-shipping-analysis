@@ -1,34 +1,36 @@
 import streamlit as st
-import pandas as pd
 import plotly.express as px
+from utils import load_data
 
 st.title("🗺 Geographic Shipping Analysis")
 
-df = pd.read_csv("Nassau Candy Distributor.csv")
+df = load_data()
 
-df["Order Date"] = pd.to_datetime(df["Order Date"], dayfirst=True)
-df["Ship Date"] = pd.to_datetime(df["Ship Date"], dayfirst=True)
+state_perf = df.groupby("State/Province").agg(
+avg_days=("Shipping Days","mean"),
+orders=("Shipping Days","count")
+).reset_index()
 
-df["Shipping Days"] = (df["Ship Date"] - df["Order Date"]).dt.days
-
-state_ship = df.groupby("State/Province")["Shipping Days"].mean().reset_index()
+state_perf["Bottleneck Score"] = state_perf["avg_days"] * state_perf["orders"]
 
 st.subheader("US Shipping Efficiency Heatmap")
 
 fig = px.choropleth(
-    state_ship,
-    locations="State/Province",
-    locationmode="USA-states",
-    color="Shipping Days",
-    scope="usa"
+state_perf,
+locations="State/Province",
+locationmode="USA-states",
+color="avg_days",
+scope="usa"
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig,use_container_width=True)
 
-st.subheader("Regional Bottleneck Visualization")
+st.subheader("Top Bottleneck States")
 
-city_delay = df.groupby("City")["Shipping Days"].mean().sort_values(ascending=False).head(10).reset_index()
+fig = px.bar(
+state_perf.sort_values("Bottleneck Score",ascending=False).head(10),
+x="State/Province",
+y="Bottleneck Score"
+)
 
-fig = px.bar(city_delay, x="City", y="Shipping Days")
-
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig,use_container_width=True)
