@@ -34,20 +34,27 @@ def train_delay_model(df):
 
     data = data[cols].copy()
 
-    # -------------------------------
-    # CLEAN DATA
-    # -------------------------------
-    data = data.replace([np.inf, -np.inf], np.nan)
+   # -------------------------------
+# CLEAN DATA (FIXED PROPERLY)
+# -------------------------------
 
-    # Categorical
-    cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
-    for col in cat_cols:
-        data[col] = data[col].astype(str).fillna("Unknown")
+import numpy as np
 
-    # Numeric
-    data["Units"] = pd.to_numeric(data["Units"], errors="coerce")
-    data["Sales"] = pd.to_numeric(data["Sales"], errors="coerce")
-    data["Shipping Days"] = pd.to_numeric(data["Shipping Days"], errors="coerce")
+data = data.replace([np.inf, -np.inf], np.nan)
+
+# Fix categorical columns
+cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
+for col in cat_cols:
+    data[col] = data[col].astype(str).fillna("Unknown")
+
+# 🔥 FORCE numeric conversion (CRITICAL FIX)
+numeric_cols = ["Units", "Sales", "Shipping Days"]
+
+for col in numeric_cols:
+    data[col] = pd.to_numeric(data[col], errors="coerce")
+
+# Drop rows where numeric conversion failed
+data = data.dropna(subset=numeric_cols)
 
     # Drop invalid rows
     data = data.dropna()
