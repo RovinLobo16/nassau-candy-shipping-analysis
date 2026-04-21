@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+
 from utils import load_data, apply_filters
 from ml_model import train_delay_model
 
 # ----------------------------------------------------
-# Page Config
+# PAGE CONFIG
 # ----------------------------------------------------
 
 st.set_page_config(
@@ -16,34 +17,31 @@ st.set_page_config(
 st.title("🤖 AI Shipping Delay Prediction")
 
 st.markdown("""
-This module uses **Machine Learning (Random Forest)** to predict shipment delays.
+Predict shipment delays using **Machine Learning (Random Forest)**.
 """)
 
 # ----------------------------------------------------
-# Load Data
+# LOAD DATA
 # ----------------------------------------------------
 
 df = load_data()
 df = apply_filters(df)
 
-st.write("Dataset shape:", df.shape)
+# DEBUG (optional)
+# st.write(df.head())
 
 # ----------------------------------------------------
-# Train Model (SAFE)
+# TRAIN MODEL (NO CACHE for now)
 # ----------------------------------------------------
-
-@st.cache_resource
-def get_model(data):
-    return train_delay_model(data)
 
 try:
-    model, encoders, metrics, feature_importance = get_model(df)
+    model, encoders, metrics, feature_importance = train_delay_model(df)
 except Exception as e:
-    st.error(f"❌ Model training failed: {e}")
+    st.error(f"Model training failed: {e}")
     st.stop()
 
 # ----------------------------------------------------
-# Model Performance
+# MODEL PERFORMANCE
 # ----------------------------------------------------
 
 st.subheader("Model Performance")
@@ -56,7 +54,7 @@ col3.metric("Recall", f"{metrics['recall']:.2%}")
 col4.metric("F1 Score", f"{metrics['f1_score']:.2%}")
 
 # ----------------------------------------------------
-# Feature Importance
+# FEATURE IMPORTANCE
 # ----------------------------------------------------
 
 st.subheader("Feature Importance")
@@ -65,14 +63,13 @@ fig = px.bar(
     feature_importance,
     x="Feature",
     y="Importance",
-    color="Importance",
-    title="Factors Influencing Shipping Delays"
+    color="Importance"
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
 # ----------------------------------------------------
-# Prediction Simulator
+# INPUT FORM
 # ----------------------------------------------------
 
 st.markdown("---")
@@ -83,15 +80,15 @@ col1, col2 = st.columns(2)
 with col1:
     region = st.selectbox("Region", sorted(df["Region"].dropna().unique()))
     ship = st.selectbox("Shipping Mode", sorted(df["Ship Mode"].dropna().unique()))
-    state = st.selectbox("Destination State", sorted(df["State/Province"].dropna().unique()))
+    state = st.selectbox("State", sorted(df["State/Province"].dropna().unique()))
 
 with col2:
     factory = st.selectbox("Factory", sorted(df["Factory"].dropna().unique()))
-    units = st.slider("Units Ordered", 1, 500, 50)
-    sales = st.slider("Sales Value ($)", 10, 10000, 500)
+    units = st.slider("Units", 1, 500, 50)
+    sales = st.slider("Sales ($)", 10, 10000, 500)
 
 # ----------------------------------------------------
-# Prepare Input
+# CREATE INPUT DATA
 # ----------------------------------------------------
 
 input_data = pd.DataFrame({
@@ -103,25 +100,32 @@ input_data = pd.DataFrame({
     "Sales": [sales]
 })
 
-# SAFE ENCODING
+# ----------------------------------------------------
+# SAFE ENCODING (VERY IMPORTANT)
+# ----------------------------------------------------
+
 for col, enc in encoders.items():
     try:
         input_data[col] = enc.transform(input_data[col])
     except:
-        input_data[col] = 0
+        input_data[col] = 0  # fallback
 
 # ----------------------------------------------------
-# Prediction
+# PREDICTION
 # ----------------------------------------------------
 
-if st.button("Predict Shipment Delay"):
+if st.button("Predict Delay"):
 
-    pred = model.predict(input_data)[0]
-    prob = model.predict_proba(input_data)[0][1]
+    try:
+        pred = model.predict(input_data)[0]
+        prob = model.predict_proba(input_data)[0][1]
 
-    st.subheader("Prediction Result")
+        st.subheader("Prediction Result")
 
-    if pred == 1:
-        st.error(f"⚠ Shipment likely delayed\n\nProbability: {prob:.2%}")
-    else:
-        st.success(f"✅ Shipment likely on time\n\nProbability: {prob:.2%}")
+        if pred == 1:
+            st.error(f"⚠ Delayed (Probability: {prob:.2%})")
+        else:
+            st.success(f"✅ On Time (Probability: {prob:.2%})")
+
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
