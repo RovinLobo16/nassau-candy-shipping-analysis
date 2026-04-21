@@ -9,26 +9,30 @@ import streamlit as st
 @st.cache_data
 def load_data():
 
-    # Load dataset
     df = pd.read_csv("Nassau Candy Distributor.csv")
 
-    # Convert dates safely
+    # -------------------------------
+    # Date Cleaning
+    # -------------------------------
     df["Order Date"] = pd.to_datetime(df["Order Date"], errors="coerce")
     df["Ship Date"] = pd.to_datetime(df["Ship Date"], errors="coerce")
 
-    # Remove rows with missing dates
     df = df.dropna(subset=["Order Date", "Ship Date"])
 
-    # Calculate shipping duration
     df["Shipping Days"] = (df["Ship Date"] - df["Order Date"]).dt.days
 
     # Remove invalid shipping times
     df = df[df["Shipping Days"] >= 0]
 
-    # --------------------------------------------------
-    # Map Products → Factories
-    # --------------------------------------------------
+    # -------------------------------
+    # NUMERIC CLEANING (CRITICAL FIX)
+    # -------------------------------
+    for col in ["Units", "Sales"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # -------------------------------
+    # Factory Mapping
+    # -------------------------------
     factory_map = {
 
         "Wonka Bar – Nutty Crunch Surprise": "Lot's O' Nuts",
@@ -54,8 +58,24 @@ def load_data():
 
     df["Factory"] = df["Product Name"].map(factory_map)
 
-    # Create logistics route
-    df["Route"] = df["Factory"] + " → " + df["State/Province"]
+    # -------------------------------
+    # HANDLE MISSING FACTORIES
+    # -------------------------------
+    df["Factory"] = df["Factory"].fillna("Unknown Factory")
+
+    # -------------------------------
+    # ROUTE CREATION (SAFE)
+    # -------------------------------
+    df["Route"] = (
+        df["Factory"].astype(str) +
+        " → " +
+        df["State/Province"].astype(str)
+    )
+
+    # -------------------------------
+    # FINAL CLEAN (IMPORTANT)
+    # -------------------------------
+    df = df.dropna(subset=["Units", "Sales", "Shipping Days"])
 
     return df
 
@@ -68,7 +88,9 @@ def apply_filters(df):
 
     st.sidebar.header("🔎 Dashboard Filters")
 
-    # Date filters
+    # -------------------------------
+    # DATE FILTER
+    # -------------------------------
     start_date = st.sidebar.date_input(
         "Start Date",
         value=df["Order Date"].min()
@@ -79,7 +101,9 @@ def apply_filters(df):
         value=df["Order Date"].max()
     )
 
-    # Region filter
+    # -------------------------------
+    # REGION FILTER
+    # -------------------------------
     region_options = sorted(df["Region"].dropna().unique())
 
     region = st.sidebar.multiselect(
@@ -88,7 +112,9 @@ def apply_filters(df):
         default=region_options
     )
 
-    # Shipping mode filter
+    # -------------------------------
+    # SHIP MODE FILTER
+    # -------------------------------
     ship_options = sorted(df["Ship Mode"].dropna().unique())
 
     ship_mode = st.sidebar.multiselect(
@@ -97,7 +123,9 @@ def apply_filters(df):
         default=ship_options
     )
 
-    # Product filter (advanced analysis)
+    # -------------------------------
+    # PRODUCT FILTER
+    # -------------------------------
     product_options = sorted(df["Product Name"].dropna().unique())
 
     product = st.sidebar.multiselect(
@@ -106,10 +134,9 @@ def apply_filters(df):
         default=product_options
     )
 
-    # --------------------------------------------------
-    # Apply Filters
-    # --------------------------------------------------
-
+    # -------------------------------
+    # APPLY FILTERS
+    # -------------------------------
     filtered_df = df[
         (df["Order Date"] >= pd.to_datetime(start_date)) &
         (df["Order Date"] <= pd.to_datetime(end_date)) &
@@ -118,7 +145,9 @@ def apply_filters(df):
         (df["Product Name"].isin(product))
     ]
 
-    # Display filtered data size
+    # -------------------------------
+    # SHOW RECORD COUNT
+    # -------------------------------
     st.sidebar.markdown("---")
     st.sidebar.write(f"📊 **Filtered Records:** {len(filtered_df)}")
 
