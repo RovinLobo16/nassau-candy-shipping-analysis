@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -8,13 +9,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def train_delay_model(df):
 
-    # -------------------------------
-    # COPY DATA
-    # -------------------------------
     data = df.copy()
-
-    if data.empty:
-        raise ValueError("Dataset is empty")
 
     # -------------------------------
     # REQUIRED COLUMNS
@@ -32,38 +27,21 @@ def train_delay_model(df):
     data = data[cols].copy()
 
     # -------------------------------
-    # CLEAN DATA (CRITICAL FIX)
+    # FORCE NUMERIC CLEANING
     # -------------------------------
-    data = data.replace([np.inf, -np.inf], np.nan)
-
-    # Categorical columns
-    cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
-    for col in cat_cols:
-        data[col] = data[col].astype(str).fillna("Unknown")
-
-    # 🔥 NUMERIC FIX (this solves "Interior" error)
-    numeric_cols = ["Units", "Sales", "Shipping Days"]
-
-    for col in numeric_cols:
+    for col in ["Units", "Sales", "Shipping Days"]:
         data[col] = pd.to_numeric(data[col], errors="coerce")
 
-    # Remove bad rows
-    data = data.dropna(subset=numeric_cols)
-
     # -------------------------------
-    # SAFETY CHECK
+    # DROP INVALID ROWS
     # -------------------------------
-    if len(data) < 50:
-        raise ValueError("Not enough clean data to train model")
+    data = data.dropna()
 
     # -------------------------------
     # TARGET VARIABLE
     # -------------------------------
     threshold = data["Shipping Days"].median()
     data["Delayed"] = (data["Shipping Days"] > threshold).astype(int)
-
-    if data["Delayed"].nunique() < 2:
-        raise ValueError("Target has only one class")
 
     # -------------------------------
     # FEATURES
@@ -72,34 +50,32 @@ def train_delay_model(df):
     y = data["Delayed"]
 
     # -------------------------------
-    # ENCODING
+    # ENCODE CATEGORICAL
     # -------------------------------
     encoders = {}
 
     for col in X.columns:
         if X[col].dtype == "object":
             le = LabelEncoder()
-            X[col] = le.fit_transform(X[col])
+            X[col] = le.fit_transform(X[col].astype(str))
             encoders[col] = le
 
     # -------------------------------
-    # TRAIN TEST SPLIT
+    # TRAIN / TEST SPLIT
     # -------------------------------
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
         test_size=0.2,
-        random_state=42,
-        stratify=y
+        random_state=42
     )
 
     # -------------------------------
     # MODEL
     # -------------------------------
     model = RandomForestClassifier(
-        n_estimators=200,
+        n_estimators=150,
         max_depth=10,
-        random_state=42,
-        n_jobs=-1
+        random_state=42
     )
 
     model.fit(X_train, y_train)
@@ -111,9 +87,9 @@ def train_delay_model(df):
 
     metrics = {
         "accuracy": accuracy_score(y_test, preds),
-        "precision": precision_score(y_test, preds),
-        "recall": recall_score(y_test, preds),
-        "f1_score": f1_score(y_test, preds)
+        "precision": precision_score(y_test, preds, zero_division=0),
+        "recall": recall_score(y_test, preds, zero_division=0),
+        "f1_score": f1_score(y_test, preds, zero_division=0)
     }
 
     # -------------------------------
