@@ -27,18 +27,16 @@ def train_delay_model(df):
     data = data[cols].copy()
 
     # -------------------------------
-    # FORCE NUMERIC CLEANING
+    # NUMERIC CLEANING
     # -------------------------------
     for col in ["Units", "Sales", "Shipping Days"]:
         data[col] = pd.to_numeric(data[col], errors="coerce")
 
-    # -------------------------------
-    # DROP INVALID ROWS
-    # -------------------------------
+    # DROP invalid rows
     data = data.dropna()
 
     # -------------------------------
-    # TARGET VARIABLE
+    # TARGET
     # -------------------------------
     threshold = data["Shipping Days"].median()
     data["Delayed"] = (data["Shipping Days"] > threshold).astype(int)
@@ -50,18 +48,31 @@ def train_delay_model(df):
     y = data["Delayed"]
 
     # -------------------------------
-    # ENCODE CATEGORICAL
+    # FORCE STRING TYPE FOR CATEGORICAL
+    # -------------------------------
+    cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
+
+    for col in cat_cols:
+        X[col] = X[col].astype(str)
+
+    # -------------------------------
+    # ENCODING (STRICT)
     # -------------------------------
     encoders = {}
 
-    for col in X.columns:
-        if X[col].dtype == "object":
-            le = LabelEncoder()
-            X[col] = le.fit_transform(X[col].astype(str))
-            encoders[col] = le
+    for col in cat_cols:
+        le = LabelEncoder()
+        X[col] = le.fit_transform(X[col])
+        encoders[col] = le
 
     # -------------------------------
-    # TRAIN / TEST SPLIT
+    # FINAL SAFETY CHECK (CRITICAL)
+    # -------------------------------
+    if any(X.dtypes == "object"):
+        raise ValueError(f"Non-numeric data still present:\n{X.dtypes}")
+
+    # -------------------------------
+    # TRAIN
     # -------------------------------
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -69,9 +80,6 @@ def train_delay_model(df):
         random_state=42
     )
 
-    # -------------------------------
-    # MODEL
-    # -------------------------------
     model = RandomForestClassifier(
         n_estimators=150,
         max_depth=10,
