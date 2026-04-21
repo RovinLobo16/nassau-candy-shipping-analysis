@@ -9,10 +9,28 @@ def train_delay_model(df):
 
     data = df.copy()
 
-    # Create target variable
+    # -------------------------------
+    # Clean Data (CRITICAL FIX)
+    # -------------------------------
+    data = data.dropna(subset=[
+        "Region",
+        "Ship Mode",
+        "State/Province",
+        "Factory",
+        "Units",
+        "Sales",
+        "Shipping Days"
+    ])
+
+    # -------------------------------
+    # Target Variable
+    # -------------------------------
     threshold = data["Shipping Days"].median()
     data["Delayed"] = (data["Shipping Days"] > threshold).astype(int)
 
+    # -------------------------------
+    # Features
+    # -------------------------------
     features = [
         "Region",
         "Ship Mode",
@@ -25,53 +43,57 @@ def train_delay_model(df):
     X = data[features].copy()
     y = data["Delayed"]
 
+    # Extra safety
+    X = X.fillna("Unknown")
+
+    # -------------------------------
+    # Encoding
+    # -------------------------------
     encoders = {}
 
-    # Encode categorical variables
     for col in X.columns:
-
         if X[col].dtype == "object":
-
             le = LabelEncoder()
             X[col] = le.fit_transform(X[col].astype(str))
             encoders[col] = le
 
-    # Train Test Split
+    # -------------------------------
+    # Train/Test Split
+    # -------------------------------
     X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
+        X, y,
         test_size=0.2,
-        stratify=y,
-        random_state=42
+        random_state=42,
+        stratify=y
     )
 
-    # Random Forest Model
+    # -------------------------------
+    # Model
+    # -------------------------------
     model = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=12,
-        min_samples_split=5,
+        n_estimators=200,
+        max_depth=10,
         random_state=42,
         n_jobs=-1
     )
 
     model.fit(X_train, y_train)
 
-    # Predictions
+    # -------------------------------
+    # Metrics
+    # -------------------------------
     preds = model.predict(X_test)
 
-    accuracy = accuracy_score(y_test, preds)
-    precision = precision_score(y_test, preds)
-    recall = recall_score(y_test, preds)
-    f1 = f1_score(y_test, preds)
-
     metrics = {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1
+        "accuracy": accuracy_score(y_test, preds),
+        "precision": precision_score(y_test, preds),
+        "recall": recall_score(y_test, preds),
+        "f1_score": f1_score(y_test, preds)
     }
 
+    # -------------------------------
     # Feature Importance
+    # -------------------------------
     feature_importance = pd.DataFrame({
         "Feature": X.columns,
         "Importance": model.feature_importances_
