@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -7,13 +8,21 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def train_delay_model(df):
 
-    def load_data():
-    return pd.read_csv("Nassau Candy Distributor.csv")
+    # -------------------------------
+    # COPY DATA
+    # -------------------------------
+    data = df.copy()
 
     # -------------------------------
-    # Clean Data (CRITICAL FIX)
+    # SAFETY CHECK
     # -------------------------------
-    data = data.dropna(subset=[
+    if data.empty:
+        raise ValueError("Dataset is empty")
+
+    # -------------------------------
+    # REQUIRED COLUMNS
+    # -------------------------------
+    cols = [
         "Region",
         "Ship Mode",
         "State/Province",
@@ -21,45 +30,62 @@ def train_delay_model(df):
         "Units",
         "Sales",
         "Shipping Days"
-    ])
+    ]
+
+    data = data[cols].copy()
 
     # -------------------------------
-    # Target Variable
+    # CLEAN DATA
+    # -------------------------------
+    data = data.replace([np.inf, -np.inf], np.nan)
+
+    # Categorical
+    cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
+    for col in cat_cols:
+        data[col] = data[col].astype(str).fillna("Unknown")
+
+    # Numeric
+    data["Units"] = pd.to_numeric(data["Units"], errors="coerce")
+    data["Sales"] = pd.to_numeric(data["Sales"], errors="coerce")
+    data["Shipping Days"] = pd.to_numeric(data["Shipping Days"], errors="coerce")
+
+    # Drop invalid rows
+    data = data.dropna()
+
+    # -------------------------------
+    # CHECK DATA SIZE
+    # -------------------------------
+    if len(data) < 50:
+        raise ValueError("Not enough data to train model")
+
+    # -------------------------------
+    # TARGET VARIABLE
     # -------------------------------
     threshold = data["Shipping Days"].median()
     data["Delayed"] = (data["Shipping Days"] > threshold).astype(int)
 
-    # -------------------------------
-    # Features
-    # -------------------------------
-    features = [
-        "Region",
-        "Ship Mode",
-        "State/Province",
-        "Factory",
-        "Units",
-        "Sales"
-    ]
+    if data["Delayed"].nunique() < 2:
+        raise ValueError("Target has only one class")
 
-    X = data[features].copy()
+    # -------------------------------
+    # FEATURES
+    # -------------------------------
+    X = data.drop(columns=["Shipping Days", "Delayed"])
     y = data["Delayed"]
 
-    # Extra safety
-    X = X.fillna("Unknown")
-
     # -------------------------------
-    # Encoding
+    # ENCODING
     # -------------------------------
     encoders = {}
 
     for col in X.columns:
         if X[col].dtype == "object":
             le = LabelEncoder()
-            X[col] = le.fit_transform(X[col].astype(str))
+            X[col] = le.fit_transform(X[col])
             encoders[col] = le
 
     # -------------------------------
-    # Train/Test Split
+    # TRAIN TEST SPLIT
     # -------------------------------
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -69,7 +95,7 @@ def train_delay_model(df):
     )
 
     # -------------------------------
-    # Model
+    # MODEL
     # -------------------------------
     model = RandomForestClassifier(
         n_estimators=200,
@@ -81,7 +107,7 @@ def train_delay_model(df):
     model.fit(X_train, y_train)
 
     # -------------------------------
-    # Metrics
+    # METRICS
     # -------------------------------
     preds = model.predict(X_test)
 
@@ -93,7 +119,7 @@ def train_delay_model(df):
     }
 
     # -------------------------------
-    # Feature Importance
+    # FEATURE IMPORTANCE
     # -------------------------------
     feature_importance = pd.DataFrame({
         "Feature": X.columns,
