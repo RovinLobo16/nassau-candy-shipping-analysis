@@ -26,14 +26,8 @@ This module uses **Machine Learning (Random Forest)** to predict shipment delays
 df = load_data()
 df = apply_filters(df)
 
-# ✅ IMPORTANT FIX: Drop nulls for ML
-df = df.dropna(subset=[
-    "Region", "Ship Mode", "State/Province",
-    "Factory", "Units", "Sales", "Shipping Days"
-])
-
 # ----------------------------------------------------
-# Train Model (Safe Cache)
+# Train Model
 # ----------------------------------------------------
 
 @st.cache_resource
@@ -81,17 +75,17 @@ st.subheader("Shipment Delay Prediction Simulator")
 col1, col2 = st.columns(2)
 
 with col1:
-    region = st.selectbox("Region", sorted(df["Region"].unique()))
-    ship = st.selectbox("Shipping Mode", sorted(df["Ship Mode"].unique()))
-    state = st.selectbox("Destination State", sorted(df["State/Province"].unique()))
+    region = st.selectbox("Region", sorted(df["Region"].dropna().unique()))
+    ship = st.selectbox("Shipping Mode", sorted(df["Ship Mode"].dropna().unique()))
+    state = st.selectbox("Destination State", sorted(df["State/Province"].dropna().unique()))
 
 with col2:
-    factory = st.selectbox("Factory", sorted(df["Factory"].unique()))
+    factory = st.selectbox("Factory", sorted(df["Factory"].dropna().unique()))
     units = st.slider("Units Ordered", 1, 500, 50)
     sales = st.slider("Sales Value ($)", 10, 10000, 500)
 
 # ----------------------------------------------------
-# Prepare Prediction Data
+# Prepare Input
 # ----------------------------------------------------
 
 input_data = pd.DataFrame({
@@ -103,13 +97,12 @@ input_data = pd.DataFrame({
     "Sales": [sales]
 })
 
-# ✅ SAFE ENCODING (IMPORTANT FIX)
-for col, encoder in encoders.items():
+# SAFE ENCODING (CRITICAL FIX)
+for col, enc in encoders.items():
     try:
-        input_data[col] = encoder.transform(input_data[col])
+        input_data[col] = enc.transform(input_data[col])
     except:
-        # Handle unseen category safely
-        input_data[col] = 0
+        input_data[col] = 0  # fallback for unseen values
 
 # ----------------------------------------------------
 # Prediction
