@@ -20,7 +20,7 @@ This module uses **Machine Learning (Random Forest)** to predict shipment delays
 """)
 
 # ----------------------------------------------------
-# Load Data (FIXED)
+# Load Data
 # ----------------------------------------------------
 
 df = load_data()
@@ -29,7 +29,7 @@ df = apply_filters(df)
 st.write("Dataset shape:", df.shape)
 
 # ----------------------------------------------------
-# Train Model
+# Train Model (SAFE)
 # ----------------------------------------------------
 
 @st.cache_resource
@@ -39,7 +39,7 @@ def get_model(data):
 try:
     model, encoders, metrics, feature_importance = get_model(df)
 except Exception as e:
-    st.error(f"Model training failed: {e}")
+    st.error(f"❌ Model training failed: {e}")
     st.stop()
 
 # ----------------------------------------------------
