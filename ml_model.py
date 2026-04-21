@@ -13,9 +13,6 @@ def train_delay_model(df):
     # -------------------------------
     data = df.copy()
 
-    # -------------------------------
-    # SAFETY CHECK
-    # -------------------------------
     if data.empty:
         raise ValueError("Dataset is empty")
 
@@ -34,36 +31,30 @@ def train_delay_model(df):
 
     data = data[cols].copy()
 
-   # -------------------------------
-# CLEAN DATA (FIXED PROPERLY)
-# -------------------------------
+    # -------------------------------
+    # CLEAN DATA (CRITICAL FIX)
+    # -------------------------------
+    data = data.replace([np.inf, -np.inf], np.nan)
 
-import numpy as np
+    # Categorical columns
+    cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
+    for col in cat_cols:
+        data[col] = data[col].astype(str).fillna("Unknown")
 
-data = data.replace([np.inf, -np.inf], np.nan)
+    # 🔥 NUMERIC FIX (this solves "Interior" error)
+    numeric_cols = ["Units", "Sales", "Shipping Days"]
 
-# Fix categorical columns
-cat_cols = ["Region", "Ship Mode", "State/Province", "Factory"]
-for col in cat_cols:
-    data[col] = data[col].astype(str).fillna("Unknown")
+    for col in numeric_cols:
+        data[col] = pd.to_numeric(data[col], errors="coerce")
 
-# 🔥 FORCE numeric conversion (CRITICAL FIX)
-numeric_cols = ["Units", "Sales", "Shipping Days"]
-
-for col in numeric_cols:
-    data[col] = pd.to_numeric(data[col], errors="coerce")
-
-# Drop rows where numeric conversion failed
-data = data.dropna(subset=numeric_cols)
-
-    # Drop invalid rows
-    data = data.dropna()
+    # Remove bad rows
+    data = data.dropna(subset=numeric_cols)
 
     # -------------------------------
-    # CHECK DATA SIZE
+    # SAFETY CHECK
     # -------------------------------
     if len(data) < 50:
-        raise ValueError("Not enough data to train model")
+        raise ValueError("Not enough clean data to train model")
 
     # -------------------------------
     # TARGET VARIABLE
