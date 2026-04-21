@@ -7,7 +7,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def train_delay_model(df):
 
-    data = df.copy()
+    def load_data():
+    return pd.read_csv("Nassau Candy Distributor.csv")
 
     # -------------------------------
     # Clean Data (CRITICAL FIX)
