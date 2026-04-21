@@ -20,12 +20,13 @@ This module uses **Machine Learning (Random Forest)** to predict shipment delays
 """)
 
 # ----------------------------------------------------
-# Load Data
+# Load Data (FIXED)
 # ----------------------------------------------------
 
-def load_data():
-    return pd.read_csv("Nassau Candy Distributor.csv")
+df = load_data()
 df = apply_filters(df)
+
+st.write("Dataset shape:", df.shape)
 
 # ----------------------------------------------------
 # Train Model
@@ -35,7 +36,11 @@ df = apply_filters(df)
 def get_model(data):
     return train_delay_model(data)
 
-model, encoders, metrics, feature_importance = get_model(df)
+try:
+    model, encoders, metrics, feature_importance = get_model(df)
+except Exception as e:
+    st.error(f"Model training failed: {e}")
+    st.stop()
 
 # ----------------------------------------------------
 # Model Performance
@@ -98,12 +103,12 @@ input_data = pd.DataFrame({
     "Sales": [sales]
 })
 
-# SAFE ENCODING (CRITICAL FIX)
+# SAFE ENCODING
 for col, enc in encoders.items():
     try:
         input_data[col] = enc.transform(input_data[col])
     except:
-        input_data[col] = 0  # fallback for unseen values
+        input_data[col] = 0
 
 # ----------------------------------------------------
 # Prediction
