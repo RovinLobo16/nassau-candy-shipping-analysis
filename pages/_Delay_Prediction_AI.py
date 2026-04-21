@@ -23,7 +23,8 @@ This module uses **Machine Learning (Random Forest)** to predict shipment delays
 # Load Data
 # ----------------------------------------------------
 
-df = load_data()
+def load_data():
+    return pd.read_csv("data/dataset.csv")
 df = apply_filters(df)
 
 # ----------------------------------------------------
