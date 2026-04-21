@@ -26,8 +26,14 @@ This module uses **Machine Learning (Random Forest)** to predict shipment delays
 df = load_data()
 df = apply_filters(df)
 
+# ✅ IMPORTANT FIX: Drop nulls for ML
+df = df.dropna(subset=[
+    "Region", "Ship Mode", "State/Province",
+    "Factory", "Units", "Sales", "Shipping Days"
+])
+
 # ----------------------------------------------------
-# Train Model
+# Train Model (Safe Cache)
 # ----------------------------------------------------
 
 @st.cache_resource
@@ -75,54 +81,35 @@ st.subheader("Shipment Delay Prediction Simulator")
 col1, col2 = st.columns(2)
 
 with col1:
-
-    region = st.selectbox(
-        "Region",
-        sorted(df["Region"].dropna().unique())
-    )
-
-    ship = st.selectbox(
-        "Shipping Mode",
-        sorted(df["Ship Mode"].dropna().unique())
-    )
-
-    state = st.selectbox(
-        "Destination State",
-        sorted(df["State/Province"].dropna().unique())
-    )
+    region = st.selectbox("Region", sorted(df["Region"].unique()))
+    ship = st.selectbox("Shipping Mode", sorted(df["Ship Mode"].unique()))
+    state = st.selectbox("Destination State", sorted(df["State/Province"].unique()))
 
 with col2:
-
-    factory = st.selectbox(
-        "Factory",
-        sorted(df["Factory"].dropna().unique())
-    )
-
-    units = st.slider(
-        "Units Ordered",
-        1, 500, 50
-    )
-
-    sales = st.slider(
-        "Sales Value ($)",
-        10, 10000, 500
-    )
+    factory = st.selectbox("Factory", sorted(df["Factory"].unique()))
+    units = st.slider("Units Ordered", 1, 500, 50)
+    sales = st.slider("Sales Value ($)", 10, 10000, 500)
 
 # ----------------------------------------------------
 # Prepare Prediction Data
 # ----------------------------------------------------
 
 input_data = pd.DataFrame({
-    "Region":[region],
-    "Ship Mode":[ship],
-    "State/Province":[state],
-    "Factory":[factory],
-    "Units":[units],
-    "Sales":[sales]
+    "Region": [region],
+    "Ship Mode": [ship],
+    "State/Province": [state],
+    "Factory": [factory],
+    "Units": [units],
+    "Sales": [sales]
 })
 
-for col, enc in encoders.items():
-    input_data[col] = enc.transform(input_data[col])
+# ✅ SAFE ENCODING (IMPORTANT FIX)
+for col, encoder in encoders.items():
+    try:
+        input_data[col] = encoder.transform(input_data[col])
+    except:
+        # Handle unseen category safely
+        input_data[col] = 0
 
 # ----------------------------------------------------
 # Prediction
@@ -136,9 +123,6 @@ if st.button("Predict Shipment Delay"):
     st.subheader("Prediction Result")
 
     if pred == 1:
-
         st.error(f"⚠ Shipment likely delayed\n\nProbability: {prob:.2%}")
-
     else:
-
         st.success(f"✅ Shipment likely on time\n\nProbability: {prob:.2%}")
