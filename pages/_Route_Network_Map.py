@@ -184,16 +184,32 @@ def map_link(lat1, lon1, lat2, lon2):
 st.markdown("---")
 st.subheader("🔗 Explore Routes in Google Maps")
 
-for _, row in top_routes.iterrows():
+valid_routes = []
+
+for _, row in routes.iterrows():
 
     f = row["Factory"]
     s = row["State/Province"]
 
     if f in factory_coords and s in state_coords:
+        valid_routes.append(row)
 
-        lat1, lon1 = factory_coords[f]
-        lat2, lon2 = state_coords[s]
+# Take top 5 from valid ones
+valid_routes = sorted(valid_routes, key=lambda x: x["shipments"], reverse=True)[:5]
 
-        link = map_link(lat1, lon1, lat2, lon2)
+if len(valid_routes) == 0:
+    st.warning("No routes available for map preview (state coordinates missing).")
 
-        st.markdown(f"[Open {f} → {s}]({link})")
+else:
+    for row in valid_routes:
+
+        lat1, lon1 = factory_coords[row["Factory"]]
+        lat2, lon2 = state_coords[row["State/Province"]]
+
+        link = f"https://www.google.com/maps/dir/{lat1},{lon1}/{lat2},{lon2}"
+
+        st.markdown(f"""
+**{row['Factory']} → {row['State/Province']}**  
+📦 Shipments: {row['shipments']}  
+🔗 [Open in Google Maps]({link})
+""")
