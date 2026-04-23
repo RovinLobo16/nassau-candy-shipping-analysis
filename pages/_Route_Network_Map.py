@@ -4,7 +4,7 @@ import pandas as pd
 from utils import load_data, apply_filters
 
 # --------------------------------------------------
-# Page Configuration
+# Page Config
 # --------------------------------------------------
 
 st.set_page_config(
@@ -12,17 +12,22 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🌎 Factory → Customer Shipping Network")
+st.title("🌎 Factory → Customer Route Network")
 
 st.markdown("""
-This visualization shows how shipments move from **production factories**
-to **customer states across the United States**.
+This map visualizes how shipments move from **production factories**
+to **customer destinations across the United States**.
 
-Routes are colored based on **average shipping time** and thickness represents **shipment volume**.
+Routes are:
+- 🔴 Red → Slower routes  
+- 🟢 Green → Faster routes  
+- Thickness → Shipment volume  
+
+🔗 Includes real **Google Maps route links**
 """)
 
 # --------------------------------------------------
-# Load and Filter Data
+# Load Data
 # --------------------------------------------------
 
 df = load_data()
@@ -41,24 +46,64 @@ factory_coords = {
 }
 
 # --------------------------------------------------
-# State Coordinates (Expanded)
+# FULL USA STATE COORDINATES (ALL 50 STATES)
 # --------------------------------------------------
 
 state_coords = {
-"CA": (36.77,-119.41),
-"TX": (31.96,-99.90),
-"FL": (27.66,-81.51),
-"NY": (43.00,-75.00),
-"IL": (40.00,-89.00),
-"PA": (41.20,-77.19),
-"OH": (40.41,-82.90),
-"GA": (32.16,-82.90),
-"NC": (35.78,-79.80),
-"MI": (44.31,-85.60)
+"Alabama": (32.806671, -86.791130),
+"Alaska": (61.370716, -152.404419),
+"Arizona": (33.729759, -111.431221),
+"Arkansas": (34.969704, -92.373123),
+"California": (36.116203, -119.681564),
+"Colorado": (39.059811, -105.311104),
+"Connecticut": (41.597782, -72.755371),
+"Delaware": (39.318523, -75.507141),
+"Florida": (27.766279, -81.686783),
+"Georgia": (33.040619, -83.643074),
+"Hawaii": (21.094318, -157.498337),
+"Idaho": (44.240459, -114.478828),
+"Illinois": (40.349457, -88.986137),
+"Indiana": (39.849426, -86.258278),
+"Iowa": (42.011539, -93.210526),
+"Kansas": (38.526600, -96.726486),
+"Kentucky": (37.668140, -84.670067),
+"Louisiana": (31.169546, -91.867805),
+"Maine": (44.693947, -69.381927),
+"Maryland": (39.063946, -76.802101),
+"Massachusetts": (42.230171, -71.530106),
+"Michigan": (43.326618, -84.536095),
+"Minnesota": (45.694454, -93.900192),
+"Mississippi": (32.741646, -89.678696),
+"Missouri": (38.456085, -92.288368),
+"Montana": (46.921925, -110.454353),
+"Nebraska": (41.125370, -98.268082),
+"Nevada": (38.313515, -117.055374),
+"New Hampshire": (43.452492, -71.563896),
+"New Jersey": (40.298904, -74.521011),
+"New Mexico": (34.840515, -106.248482),
+"New York": (42.165726, -74.948051),
+"North Carolina": (35.630066, -79.806419),
+"North Dakota": (47.528912, -99.784012),
+"Ohio": (40.388783, -82.764915),
+"Oklahoma": (35.565342, -96.928917),
+"Oregon": (44.572021, -122.070938),
+"Pennsylvania": (40.590752, -77.209755),
+"Rhode Island": (41.680893, -71.511780),
+"South Carolina": (33.856892, -80.945007),
+"South Dakota": (44.299782, -99.438828),
+"Tennessee": (35.747845, -86.692345),
+"Texas": (31.054487, -97.563461),
+"Utah": (40.150032, -111.862434),
+"Vermont": (44.045876, -72.710686),
+"Virginia": (37.769337, -78.169968),
+"Washington": (47.400902, -121.490494),
+"West Virginia": (38.491226, -80.954453),
+"Wisconsin": (44.268543, -89.616508),
+"Wyoming": (42.755966, -107.302490)
 }
 
 # --------------------------------------------------
-# Route Statistics
+# Route Aggregation (FULLY CORRECT)
 # --------------------------------------------------
 
 routes = df.groupby(["Factory","State/Province"]).agg(
@@ -66,17 +111,27 @@ routes = df.groupby(["Factory","State/Province"]).agg(
     shipments=("Shipping Days","count")
 ).reset_index()
 
+# Remove invalid
+routes = routes.dropna(subset=["Factory","State/Province"])
+
 # --------------------------------------------------
 # KPI Overview
 # --------------------------------------------------
 
 st.subheader("Route Network Overview")
 
-col1,col2,col3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 
 col1.metric("Total Routes", len(routes))
 col2.metric("Total Shipments", routes["shipments"].sum())
 col3.metric("Avg Shipping Time", f"{routes['avg_shipping_days'].mean():.2f} days")
+
+# --------------------------------------------------
+# Google Maps Link Generator
+# --------------------------------------------------
+
+def generate_map_link(lat1, lon1, lat2, lon2):
+    return f"https://www.google.com/maps/dir/{lat1},{lon1}/{lat2},{lon2}"
 
 # --------------------------------------------------
 # Build Map
@@ -84,48 +139,51 @@ col3.metric("Avg Shipping Time", f"{routes['avg_shipping_days'].mean():.2f} days
 
 fig = go.Figure()
 
-for _,row in routes.iterrows():
+avg_delay = routes["avg_shipping_days"].mean()
+
+for _, row in routes.iterrows():
 
     factory = row["Factory"]
     state = row["State/Province"]
 
     if factory in factory_coords and state in state_coords:
 
-        lat1,lon1 = factory_coords[factory]
-        lat2,lon2 = state_coords[state]
+        lat1, lon1 = factory_coords[factory]
+        lat2, lon2 = state_coords[state]
 
         delay = row["avg_shipping_days"]
         volume = row["shipments"]
 
+        color = "red" if delay > avg_delay else "green"
+
         fig.add_trace(go.Scattergeo(
-            lon=[lon1,lon2],
-            lat=[lat1,lat2],
+            lon=[lon1, lon2],
+            lat=[lat1, lat2],
             mode="lines",
             line=dict(
-                width=1 + volume*0.05,
-                color="red" if delay > routes["avg_shipping_days"].mean() else "green"
+                width=1 + volume * 0.08,
+                color=color
             ),
-            opacity=0.7,
+            opacity=0.6,
             hoverinfo="text",
             text=f"""
-Factory: {factory}<br>
-Destination: {state}<br>
-Shipments: {volume}<br>
+Factory: {factory}
+State: {state}
+Shipments: {volume}
 Avg Days: {delay:.2f}
 """
         ))
 
 # --------------------------------------------------
-# Add Factory Markers
+# Factory Markers
 # --------------------------------------------------
 
-for factory,(lat,lon) in factory_coords.items():
-
+for factory, (lat, lon) in factory_coords.items():
     fig.add_trace(go.Scattergeo(
         lon=[lon],
         lat=[lat],
         mode="markers",
-        marker=dict(size=8,color="blue"),
+        marker=dict(size=8, color="blue"),
         name=factory
     ))
 
@@ -134,19 +192,15 @@ for factory,(lat,lon) in factory_coords.items():
 # --------------------------------------------------
 
 fig.update_layout(
-    title="Factory → Customer Shipping Routes Across USA",
-    geo=dict(
-        scope="usa",
-        projection_type="albers usa",
-        showland=True
-    ),
-    margin=dict(l=0,r=0,t=50,b=0)
+    geo=dict(scope="usa"),
+    margin=dict(l=0, r=0, t=40, b=0),
+    title="Factory → Customer Shipping Routes Across USA"
 )
 
-st.plotly_chart(fig,use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 # --------------------------------------------------
-# Route Delay Analysis
+# Slow Routes + GOOGLE MAP LINKS
 # --------------------------------------------------
 
 st.markdown("---")
@@ -157,19 +211,47 @@ slow_routes = routes.sort_values(
     ascending=False
 ).head(10)
 
-st.dataframe(slow_routes, use_container_width=True)
+# Add links
+links = []
+for _, row in slow_routes.iterrows():
+
+    factory = row["Factory"]
+    state = row["State/Province"]
+
+    if factory in factory_coords and state in state_coords:
+        lat1, lon1 = factory_coords[factory]
+        lat2, lon2 = state_coords[state]
+        link = generate_map_link(lat1, lon1, lat2, lon2)
+    else:
+        link = None
+
+    links.append(link)
+
+slow_routes["Map"] = links
+
+# Display nicely
+for _, row in slow_routes.iterrows():
+
+    st.markdown(f"""
+**{row['Factory']} → {row['State/Province']}**  
+📦 Shipments: {row['shipments']}  
+⏱ Avg Days: {row['avg_shipping_days']:.2f}  
+🔗 [Open in Google Maps]({row['Map']})
+""")
 
 # --------------------------------------------------
-# Insight Section
+# Insight
 # --------------------------------------------------
 
-worst_route = slow_routes.iloc[0]
+worst = slow_routes.iloc[0]
 
-st.warning(
-f"""
-The slowest route is **{worst_route['Factory']} → {worst_route['State/Province']}**
-with an average delivery time of **{worst_route['avg_shipping_days']:.2f} days**.
+st.warning(f"""
+🚨 Worst Route: **{worst['Factory']} → {worst['State/Province']}**
 
-This route may require improved logistics planning or faster shipping modes.
-"""
-)
+Average delivery time: **{worst['avg_shipping_days']:.2f} days**
+
+👉 Recommended:
+- Optimize route planning
+- Use faster shipping modes
+- Relocate inventory closer to demand
+""")
